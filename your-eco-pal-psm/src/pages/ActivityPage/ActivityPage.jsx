@@ -1,142 +1,81 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Container, Row, Col } from 'react-bootstrap';
+import React, { useRef } from 'react';
+import { Container, Card } from 'react-bootstrap';
 import ActivityTracker from './components/ActivityTracker';
 import TransportModal from './components/TransportModal';
 import MapModal from './components/MapModal';
+import JourneyStats from './components/JourneyStats';
+import AddJourneyForm from './components/AddJourneyForm';
+import PastJourneysTable from './components/PastJourneysTable';
 import useGeolocation from './hooks/useGeolocation';
 import useMap from './hooks/useMap';
+import useJourneys from './hooks/useJourneys';
+import useJourneyStats from './hooks/useJourneyStats';
+import useJourneyTracker from './hooks/useJourneyTracker';
+import { useAuth } from '../../features/auth/context/AuthContext';
 
 const ActivityPage = () => {
-  const [journeyStatus, setJourneyStatus] = useState('notStarted');
-  const [transportMode, setTransportMode] = useState('');
-  const [location, setLocation] = useState({ speed: 0, latitude: 0, longitude: 0 });
-  const [distance, setDistance] = useState(0);
-  const [elapsedTime, setElapsedTime] = useState(0);
-  const [routeCoordinates, setRouteCoordinates] = useState([]);
-  const [showTransportModal, setShowTransportModal] = useState(false);
-  const [showMapModal, setShowMapModal] = useState(false);
-  const [completedJourneys, setCompletedJourneys] = useState([]); // New state for completed journeys
-
   const mapRef = useRef(null);
-  const timerRef = useRef(null);
+  const { currentUser } = useAuth();
 
-  useEffect(() => {
-    if (journeyStatus === 'inProgress') {
-      timerRef.current = setInterval(() => {
-        setElapsedTime((prev) => prev + 1);
-      }, 1000);
-    } else {
-      clearInterval(timerRef.current);
-    }
+  // Use our custom hooks
+  const {
+    journeyStatus,
+    transportMode,
+    location,
+    distance,
+    elapsedTime,
+    routeCoordinates,
+    showTransportModal,
+    showMapModal,
+    setLocation,
+    setDistance,
+    setRouteCoordinates,
+    handleStartJourney,
+    handleEndJourney,
+    handleMapModalClose,
+    handleTransportSelect,
+    handleTransportModalClose,
+    handleTransportModalSubmit,
+    formatTime
+  } = useJourneyTracker();
 
-    return () => clearInterval(timerRef.current);
-  }, [journeyStatus]);
+  const { completedJourneys, saveCompletedJourney } = useJourneys(currentUser);
+  const stats = useJourneyStats(completedJourneys);
 
-  const calculateDistance = (lat1, lon1, lat2, lon2) => {
-    const R = 6371;
-    const dLat = deg2rad(lat2 - lat1);
-    const dLon = deg2rad(lon2 - lon1);
-    const a =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c;
-  };
-
-  const deg2rad = (deg) => deg * (Math.PI / 180);
-
-  const formatTime = (seconds) => {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const secs = seconds % 60;
-    return [hours, minutes, secs].map((val) => val.toString().padStart(2, '0')).join(':');
-  };
-
-  useGeolocation(journeyStatus, setLocation, setDistance, calculateDistance, setRouteCoordinates);
+  // Setup geolocation tracking
+  useGeolocation(journeyStatus, setLocation, setDistance, setRouteCoordinates);
   useMap(showMapModal, routeCoordinates, mapRef);
 
-  const handleStartJourney = () => setShowTransportModal(true);
-
-  const handleEndJourney = () => {
-    setJourneyStatus('finished');
-    setShowMapModal(true);
-
-    // Save the completed journey
-    setCompletedJourneys((prev) => [
-      ...prev,
-      {
-        transportMode,
-        distance: distance.toFixed(2),
-        elapsedTime: formatTime(elapsedTime),
-      },
-    ]);
-  };
-
-  const handleResetJourney = () => {
-    setJourneyStatus('notStarted');
-    setTransportMode('');
-    setDistance(0);
-    setElapsedTime(0);
-    setRouteCoordinates([]);
-    setShowMapModal(false);
-    clearInterval(timerRef.current);
-  };
-
-  const handleMapModalClose = () => {
-    // Reset the activity tracker when the map modal is closed
-    handleResetJourney();
+  // Handle journey end and save to Firestore
+  const handleJourneyEnd = () => {
+    const journey = handleEndJourney();
+    
+    if (currentUser?.uid) {
+      saveCompletedJourney(currentUser.uid, journey);
+    }
   };
 
   return (
-    <Container className="py-5">
-      {/* Completed Journeys Table */}
-      <Row className="mb-4">
-        <Col>
-          <h4>Completed Journeys</h4>
-          {completedJourneys.length > 0 ? (
-            <table className="table table-striped">
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th>Transport Mode</th>
-                  <th>Distance (km)</th>
-                  <th>Duration</th>
-                </tr>
-              </thead>
-              <tbody>
-                {completedJourneys.map((journey, index) => (
-                  <tr key={index}>
-                    <td>{index + 1}</td>
-                    <td>{journey.transportMode}</td>
-                    <td>{journey.distance}</td>
-                    <td>{journey.elapsedTime}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <p>No journeys completed yet.</p>
-          )}
-        </Col>
-      </Row>
+    <Container className="py-4" style={{ backgroundColor: '#e8f5e9', minHeight: '100vh' }}>
+      {/* Track Journey Form */}
+      <Card className="border-success mb-4">
+        <Card.Header className="bg-transparent border-success text-center">
+          <h4 className="mb-0">Track Journey</h4>
+        </Card.Header>
+        <Card.Body>
+          <AddJourneyForm onStartJourney={handleStartJourney} />
+        </Card.Body>
+      </Card>
 
+      {/* Past Journeys Table */}
+      <PastJourneysTable journeys={completedJourneys} />
 
-
-      {/* Activity Tracker */}
-      <Row className="justify-content-center mb-4">
-        <Col xs={12} md={8} lg={6}>
-          <ActivityTracker
-            journeyStatus={journeyStatus}
-            transportMode={transportMode}
-            location={location}
-            distance={distance}
-            elapsedTime={elapsedTime}
-            formatTime={formatTime}
-            handleStartJourney={handleStartJourney}
-            handleEndJourney={handleEndJourney}
-          />
-        </Col>
-      </Row>
+      {/* Journey Stats */}
+      <JourneyStats 
+        totalJourneys={stats.totalJourneys}
+        co2SavedMonth={stats.co2SavedMonth}
+        mostUsedTransport={stats.mostUsedTransport}
+      />
 
       {/* Transport Modal */}
       <TransportModal
@@ -146,30 +85,33 @@ const ActivityPage = () => {
           { value: 'walking', label: 'Walking' },
           { value: 'running', label: 'Running' },
           { value: 'cycling', label: 'Cycling' },
+          { value: 'bus', label: 'Bus' },
           { value: 'driving', label: 'Driving' },
         ]}
-        handleTransportSelect={(e) => setTransportMode(e.target.value)}
-        handleTransportModalClose={() => setShowTransportModal(false)}
-        handleTransportModalSubmit={() => {
-          if (transportMode) {
-            setShowTransportModal(false);
-            setJourneyStatus('inProgress');
-            setRouteCoordinates([]);
-          }
-        }}
+        handleTransportSelect={handleTransportSelect}
+        handleTransportModalClose={handleTransportModalClose}
+        handleTransportModalSubmit={handleTransportModalSubmit}
       />
 
       {/* Map Modal */}
       <MapModal
         show={showMapModal}
-        transportMode={transportMode}
-        distance={distance}
-        elapsedTime={elapsedTime}
-        formatTime={formatTime}
-        routeCoordinates={routeCoordinates}
         mapRef={mapRef}
-        handleMapModalClose={handleMapModalClose} // Close button now resets the tracker
+        handleMapModalClose={handleMapModalClose}
       />
+
+      {/* Activity Tracker Modal (shown when journey in progress) */}
+      {journeyStatus === 'inProgress' && (
+        <ActivityTracker
+          journeyStatus={journeyStatus}
+          transportMode={transportMode}
+          location={location}
+          distance={distance}
+          elapsedTime={elapsedTime}
+          formatTime={formatTime}
+          handleEndJourney={handleJourneyEnd}
+        />
+      )}
     </Container>
   );
 };
