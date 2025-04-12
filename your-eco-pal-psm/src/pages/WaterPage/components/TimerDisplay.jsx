@@ -1,4 +1,3 @@
-// src/components/TimerDisplay.jsx
 import React from 'react';
 
 const TimerDisplay = ({ hours, minutes, seconds }) => {

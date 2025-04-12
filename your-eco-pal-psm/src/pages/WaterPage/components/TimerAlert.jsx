@@ -1,4 +1,3 @@
-// src/components/TimerAlert.jsx
 import React from 'react';
 
 const TimerAlert = ({ handleCloseAlert }) => {

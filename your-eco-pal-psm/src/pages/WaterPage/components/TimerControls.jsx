@@ -1,4 +1,3 @@
-// src/components/TimerControls.jsx
 import React from 'react';
 
 const TimerControls = ({

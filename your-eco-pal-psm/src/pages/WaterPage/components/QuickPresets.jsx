@@ -1,4 +1,3 @@
-// src/components/QuickPresets.jsx
 import React from 'react';
 
 const QuickPresets = ({ applyPreset, isRunning }) => {

@@ -1,4 +1,3 @@
-// src/hooks/useTimer.js
 import { useState, useEffect, useRef } from 'react';
 
 const useTimer = () => {
